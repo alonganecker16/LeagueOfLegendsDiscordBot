@@ -1,0 +1,291 @@
+import random
+import requests
+import json
+import math
+from discord.ext.commands import Bot
+
+
+# Sets up the bot and initializes the constants
+
+
+BOT_PREFIX = "*"
+TOKEN = "NTIwNDI4ODkyNzc1Nzc2MjU2.DuzMHg.1CtTwtz8UKrArZPNSNT3_OPv3WI"
+RIOT_KEY = "RGAPI-30df5622-1d1a-45ca-8402-9922df4fc5a1"
+settings = {}
+champ_list = {}
+
+client = Bot(command_prefix=BOT_PREFIX)
+
+
+# Helps the player decide which role they should play their next game
+
+
+@client.command(name='pickmyrole',
+                description="Can't decide your role? I will pick for you!")
+async def pick_role():
+    roles = [
+        'Jungle',
+        'Support',
+        'Bot',
+        'Mid',
+        'Top'
+    ]
+    await client.say("I think you should play " + random.choice(roles) + ". \nDon't feed!")
+
+
+# Get the current summoner level of the summoner requested
+
+
+@client.command(name='mylevel',
+                description='Find out your level on League of Legends',
+                brief='[Summoner Name]')
+async def lol_level(summoner_name=None):
+
+    if summoner_name is None:
+        await client.say("You forgot to give me a summoner name dummy.")
+    else:
+        id_url = "https://na1.api.riotgames.com/lol/summoner/v4/summoners/by-name/" + summoner_name + "?api_key=" \
+                 + RIOT_KEY
+        response = requests.get(id_url)
+        try:
+            level = response.json()['summonerLevel']
+            value = str(level)
+
+            if level < 30:
+                brag = "Come on noob, hurry up already."
+            elif level < 100:
+                brag = "Good job! You can play League AND have a social life!"
+            elif level >= 100:
+                brag = "You really need to get out more..."
+
+            await client.say(summoner_name + "'s account level is " + value + ". " + brag)
+        except KeyError:
+            await client.say(summoner_name + " does not exist. Just like your skill.")
+
+
+# Returns the current rank of the summoner given
+
+
+@client.command(name='myrank',
+                description='See where you are ranked in solo queue.',
+                brief='[Summoner Name]')
+async def lol_rank(summoner_name=None):
+    found = True
+
+    if summoner_name is None:
+        await client.say("You forgot to give me a summoner name dummy.")
+    else:
+        id_url = "https://na1.api.riotgames.com/lol/summoner/v4/summoners/by-name/" + summoner_name + "?api_key=" \
+                 + RIOT_KEY
+        response = requests.get(id_url)
+        try:
+            summoner_id = response.json()['id']
+        except KeyError:
+            found = False
+            await client.say(summoner_name + " does not exist. Just like your skill.")
+
+    if found:
+        rank_url = "https://na1.api.riotgames.com/lol/league/v4/positions/by-summoner/" + summoner_id + "?api_key=" \
+                   + RIOT_KEY
+        response = requests.get(rank_url)
+        try:
+            tier = response.json()[1]['tier']
+            rank = response.json()[1]['rank']
+            lp = str(response.json()[1]['leaguePoints'])
+            await client.say(summoner_name + "'s rank is " + tier + " " + rank + " " + lp + "LP")
+        except KeyError:
+            await client.say("Rank not found for " + summoner_name)
+
+
+# Gets the summoner's last match played
+
+
+@client.command(name='lastmatch',
+                description='Find out if the summoner fed the Yasuo or carried their team in their last match.',
+                brief='[Summoner Name]')
+async def lol_last_match(summoner_name=None):
+    global champ_list
+    account_id = ""
+    match_id = ""
+    found = False
+    found_match = False
+    found_match_data = False
+    champion_played = ""
+    game_mode = ""
+    kills = -1
+    deaths = -1
+    assists = -1
+    kda = ""
+    minions_killed = -1
+    game_time_seconds = -1
+    game_time = ""
+    participant_id = -1
+    match_data = {}
+    summ_url = "https://na1.api.riotgames.com/lol/summoner/v4/summoners/by-name/" + summoner_name + "?api_key=" \
+                 + RIOT_KEY
+
+    # Get the account id:
+    if summoner_name is None:
+        await client.say("You forgot to give me a summoner name dummy.")
+        found = False
+    else:
+        response = requests.get(summ_url)
+        try:
+            account_id = response.json()['accountId']
+            found = True
+        except KeyError:
+            found = False
+            await client.say(summoner_name + " does not exist. Just like your skill.")
+
+    # Get the last match played by the summoner
+    if found:
+        match_list_url = "https://na1.api.riotgames.com/lol/match/v4/matchlists/by-account/" + account_id \
+                         + "?endIndex=1&beginIndex=0&api_key=" + RIOT_KEY
+        response = requests.get(match_list_url)
+        try:
+            match_id = str(response.json()['matches'][0]['gameId'])
+            print(match_id)
+            found_match = True
+        except KeyError:
+            found_match = False
+            await client.say(summoner_name + " does not have a recent match played.")
+
+    # Get the data for the last match played
+    if found_match:
+        last_match_url = "https://na1.api.riotgames.com/lol/match/v4/matches/" + match_id + "?api_key=" + RIOT_KEY
+        response = requests.get(last_match_url)
+        try:
+            match_data = response.json()
+            found_match_data = True
+        except KeyError:
+            found_match_data = False
+            await client.say("Match info not found.")
+
+    if found_match_data:
+
+        # Find the participant id of the summoner
+        for i in match_data.get('participantIdentities'):
+            if i.get('player').get('accountId') == account_id:
+                participant_id = i.get('participantId')
+                print(str(participant_id))
+                break
+
+        # Get the game time and format it
+        game_time_seconds = match_data.get('gameDuration')
+        game_time = str(math.floor(game_time_seconds / 60)) + ":" + str(game_time_seconds % 60)
+
+        # Get the in game statistics and match info
+        kills = match_data.get('participants')[participant_id - 1].get('stats').get('kills')
+        deaths = match_data.get('participants')[participant_id - 1].get('stats').get('deaths')
+        assists = match_data.get('participants')[participant_id - 1].get('stats').get('assists')
+        minions_killed = str(match_data.get('participants')[participant_id - 1].get('stats').get('totalMinionsKilled')
+            + match_data.get('participants')[participant_id - 1].get('stats').get('neutralMinionsKilled'))
+        champion_played = champ_list.get(str(match_data.get('participants')[participant_id - 1].get('championId')))
+        kda = str(kills) + "/" + str(deaths) + "/" + str(assists)
+
+        await client.say(summoner_name + "'s last match:\nChampion: " + champion_played + "\nMatch time: " +
+                         game_time + "\nK/D/A: " + kda + "\nMinions Killed: " + minions_killed)
+
+
+# Gets the current free-to-play champions
+
+
+@client.command(name='freetoplay',
+                description='Find out which free to play champions are currently available.')
+async def lol_free_to_plays():
+    global champ_list
+    url = "https://na1.api.riotgames.com/lol/platform/v3/champion-rotations?api_key=" + RIOT_KEY
+    response = requests.get(url)
+    try:
+        free_champs = response.json()['freeChampionIds']
+    except KeyError:
+        await client.say("Data not found")
+
+    free_champ_list = ''
+    for champs in free_champs:
+        free_champ_list += (champ_list.get(str(champs)) + ", ")
+
+    free_champ_list = free_champ_list[:-2]
+
+    await client.say("The current free to play champions are " + free_champ_list + ".")
+
+
+# Gets the existing settings.txt
+
+
+def get_settings():
+    global settings
+    global champ_list
+    with open('settings.txt', 'r') as file:
+        settings = eval(file.read())
+    file.close()
+    with open('championSheet.txt', 'r') as file2:
+        champ_list = eval(file2.read())
+    file2.close()
+
+
+# Updates the version if there is a new version
+
+
+def update_settings():
+    url = "https://ddragon.leagueoflegends.com/realms/na.json"
+
+    response = requests.get(url)
+    try:
+        version = response.json()['v']
+    except KeyError:
+        print("Data not found")
+    print("Version from the API: " + version)
+    print("Version from the text file " + settings.get('version'))
+
+    if version != settings.get('version'):
+        settings['version'] = version
+        update_champ_sheet(version)
+        with open('settings.txt', 'w') as file:
+            file.write(json.dumps(settings))
+        file.close()
+        get_settings()
+        print("Version updated!")
+
+
+
+
+# Update the championSheet.txt if there is a new version
+
+
+def update_champ_sheet(version):
+    url = "http://ddragon.leagueoflegends.com/cdn/" + version + "/data/en_US/champion.json"
+    response = requests.get(url)
+    champ_dict = {}
+
+    try:
+        champ_sheet = response.json()['data']
+    except KeyError:
+        print("data not found")
+
+    for key in champ_sheet:
+        champ_dict[champ_sheet.get(key).get('key')] = champ_sheet.get(key).get('name')
+
+    with open('championSheet.txt', 'w') as file:
+        file.write(json.dumps(champ_dict))
+    file.close()
+
+    print("Champ Sheet updated!")
+
+
+# Let's me know the program is up and running
+
+
+@client.event
+async def on_ready():
+    print('Logged in as')
+    print(client.user.name)
+    print(client.user.id)
+    print('-------------')
+    get_settings()
+    update_settings()
+    print("Current version of LoL: " + settings.get('version'))
+    print('Files updated as needed')
+
+
+client.run('NTIwNDI4ODkyNzc1Nzc2MjU2.DuzMHg.1CtTwtz8UKrArZPNSNT3_OPv3WI')
