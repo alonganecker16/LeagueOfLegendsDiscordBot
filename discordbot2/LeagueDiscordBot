@@ -288,4 +288,4 @@ async def on_ready():
     print('Files updated as needed')
 
 
-client.run('NTIwNDI4ODkyNzc1Nzc2MjU2.DuzMHg.1CtTwtz8UKrArZPNSNT3_OPv3WI')
+client.run(TOKEN)
