@@ -9,8 +9,8 @@ from discord.ext.commands import Bot
 
 
 BOT_PREFIX = "*"
-TOKEN = "NTIwNDI4ODkyNzc1Nzc2MjU2.DuzMHg.1CtTwtz8UKrArZPNSNT3_OPv3WI"
-RIOT_KEY = "RGAPI-30df5622-1d1a-45ca-8402-9922df4fc5a1"
+TOKEN = "[INSERT DISCORD BOT TOKEN HERE]"
+RIOT_KEY = "[INSERT RIOT DEV KEY HERE]"
 settings = {}
 champ_list = {}
 
